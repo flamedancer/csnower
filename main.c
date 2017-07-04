@@ -80,8 +80,13 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <string.h>
+#include <errno.h>
+#include <stdlib.h>
+#include <fcntl.h>
+#include "request.c"
 
-#define READLEN 10
+
+#define READLEN 1024
 
 int main() {
     int server_sockfd, client_sockfd;
@@ -94,6 +99,12 @@ int main() {
     server_address.sin_addr.s_addr = htonl(INADDR_ANY);
     server_address.sin_port = htons(8734);
     server_len = sizeof(server_address);
+    int is_open = 1;
+    if (setsockopt(server_sockfd, SOL_SOCKET, SO_REUSEADDR, (int *)&is_open, sizeof(is_open)) == -1) {
+        printf("setsockopt SO_REUSEADDR FAILED! ERROR[%d] ERRORINFO[%s]\n", errno, strerror(errno));
+        close(server_sockfd);
+        exit(1);
+    }
     bind(server_sockfd, (struct sockaddr *)&server_address, server_len);
 
     
@@ -107,12 +118,16 @@ int main() {
         client_len = sizeof(client_address);
         client_sockfd = accept(server_sockfd,
             (struct sockaddr *)&client_address, (socklen_t *)&client_len);
-        do {
-            printf("try to read\n");
-            nread = read(client_sockfd, &ch, READLEN);
-            printf("%s", ch);
-        }
-        while(nread == READLEN); 
+         // int flags = fcntl(client_sockfd, F_GETFL, 0);
+         // fcntl(client_sockfd, F_SETFL, flags | O_NONBLOCK);
+        print_readlines(client_sockfd);
+        // do {
+        //     
+        //     nread = read(client_sockfd, &ch, READLEN);
+        //     printf("%s", ch);
+        //     printf("%d", nread);
+        // }
+        // while(nread == READLEN); 
         char response[] = "HTTP/1.1 200 OK\nContent-Type: text/html; charset=utf-8\n\n Hello World!";
         write(client_sockfd, &response, sizeof(response));
         printf("response OK!\n");
