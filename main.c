@@ -128,7 +128,7 @@ int main() {
         //     printf("%d", nread);
         // }
         // while(nread == READLEN); 
-        char response[] = "HTTP/1.1 200 OK\nContent-Type: text/html; charset=utf-8\n\n Hello World!";
+        char response[] = "HTTP/1.1 200 OK\nContent-Type: text/html; charset=utf-8\n\n Hello World!\r\n";
         write(client_sockfd, &response, sizeof(response));
         printf("response OK!\n");
         close(client_sockfd);
