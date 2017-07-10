@@ -209,16 +209,16 @@ void suck_body(struct request * req, char * line_p) {
 }
 
 
-int get_content_length(struct request * req) {
+char * get_header_value(struct request * req, char * header_key) {
     for (int i=0; i < MAXHEADERSLEN; i++) {
         if ( req->headers[i].key[0] == '\0') {
-            return 0;
+            return NULL;
         }
-        else if (mystrcmp(req->headers[i].key, "Content-Length") == 0)  {
-            return myatoi(req->headers[i].value);
+        else if (mystrcmp(req->headers[i].key, header_key) == 0)  {
+            return req->headers[i].value;
         }
     }
-    return 0;
+    return NULL;
 }
 
 
@@ -230,6 +230,7 @@ void print_readlines(int client) {
     int keep_line = 0;
     char * none_line = "";
     int content_length = -1;
+    char * content_length_str;
     struct request this_request = create_request();
     while(1) { 
         keep_line = 0;
@@ -239,7 +240,11 @@ void print_readlines(int client) {
             break;
         }
         if (mystrcmp(line, none_line) == 0) {
-            content_length = get_content_length(&this_request);
+            content_length_str = get_header_value(&this_request, "Content-Length");
+            if (NULL == content_length_str)
+                content_length = 0;
+            else
+                content_length = myatoi(get_header_value(&this_request, "Content-Length"));
             // 数据结束
             if (content_length == 0) {
                 read_over = 1;
@@ -275,7 +280,8 @@ void print_readlines(int client) {
         if (this_request.headers[i].key[0] != '\0') {
             printf(">>> request header key `%s`  value '%s' \n", this_request.headers[i].key, this_request.headers[i].value); 
         }
-        
+        else
+            break; 
     }
     printf(">>> request body is %s\n", this_request.body);
     clear_request(&this_request);

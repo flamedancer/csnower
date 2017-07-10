@@ -112,14 +112,13 @@ int main() {
     while(1) {
         char ch[READLEN];
         int nread;
-        printf("server  waiting\n");
+        printf("server waiting connect\n");
 
         //Accept a connection
         client_len = sizeof(client_address);
         client_sockfd = accept(server_sockfd,
             (struct sockaddr *)&client_address, (socklen_t *)&client_len);
-         // int flags = fcntl(client_sockfd, F_GETFL, 0);
-         // fcntl(client_sockfd, F_SETFL, flags | O_NONBLOCK);
+        printf("new connect \n");
         print_readlines(client_sockfd);
         // do {
         //     
