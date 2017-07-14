@@ -73,6 +73,8 @@
 
 #include <sys/types.h>
 #include <sys/socket.h>
+// #include <sys/epoll.h>  // linux
+#include <sys/event.h>  //  mac os
 #include <stdio.h>
 
 #include <netinet/in.h>
@@ -81,18 +83,23 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
+#include <err.h> 
 #include <stdlib.h>
 #include <fcntl.h>
 #include "request.c"
+#include "poll.c"
 
 
 #define READLEN 1024
+#define LISTENQ 20
+const int MaxEvents = 20;
 
 int main() {
     int server_sockfd, client_sockfd;
     int server_len, client_len;
     struct sockaddr_in server_address;
     struct sockaddr_in client_address;
+    client_len = sizeof(client_address);
 
     server_sockfd = socket(AF_INET, SOCK_STREAM, 0);
     server_address.sin_family = AF_INET;
@@ -108,31 +115,98 @@ int main() {
     bind(server_sockfd, (struct sockaddr *)&server_address, server_len);
 
     
-    listen(server_sockfd, 5);
-    while(1) {
-        char ch[READLEN];
-        int nread;
-        printf("server waiting connect\n");
+    listen(server_sockfd, LISTENQ);
+    // setNonBlock(server_sockfd);
 
-        //Accept a connection
-        client_len = sizeof(client_address);
-        client_sockfd = accept(server_sockfd,
-            (struct sockaddr *)&client_address, (socklen_t *)&client_len);
-        printf("new connect \n");
-        print_readlines(client_sockfd);
-        // do {
-        //     
-        //     nread = read(client_sockfd, &ch, READLEN);
-        //     printf("%s", ch);
-        //     printf("%d", nread);
-        // }
-        // while(nread == READLEN); 
-        char response[] = "HTTP/1.1 200 OK\nContent-Type: text/html; charset=utf-8\n\n Hello World!\r\n";
-        write(client_sockfd, &response, sizeof(response));
-        printf("response OK!\n");
-        close(client_sockfd);
+
+    int epfd;
+    int nfds;
+    int sock_fd;
+    // ** 创建 poll
+    // epfd = epoll_create(256);//生成epoll句柄   linux
+    if ((epfd = kqueue()) == -1)  // mac
+        err(1, "Cannot create kqueue");
+        
+    // poll 监听 server_sock
+    // ** linux 
+    // struct epoll_event ev, events[MaxEvents];
+    // ev.data.fd = listenfd;//设置与要处理事件相关的文件描述符 ?
+    // ev.events = EPOLLIN;//设置要处理的事件类型
+    // epoll_ctl(epfd, EPOLL_CTL_ADD, server_sockfd, &ev);
+     
+    // ** mac
+    struct kevent events[MaxEvents];
+    updateEvents(epfd, server_sockfd, kReadEvent, 0);
+
+    char response[] = "HTTP/1.1 200 OK\nContent-Type: text/html; charset=utf-8\n\n Hello World!\r\n";
+    
+    while(1) {
+        //  等待
+        // linux
+        // nfds = epoll_wait(epfd,events,20,500);//等待事件发生
+        // mac
+        // struct timespec timeout;
+        // timeout.tv_sec = 1000;
+        // timeout.tv_nsec = 1000;
+        // int n = kevent(epfd, NULL, 0, events, MaxEvents, &timeout);
+        int n = kevent(epfd, NULL, 0, events, MaxEvents, NULL);
+        printf("server waiting connect %d \n", n);
+        for(int i=0;i<n;i++) {
+            // linux
+            // if(events[i].data.fd == server_sockfd)  { //有新的连接
+            //     //Accept a connection
+            //     client_sockfd = accept(server_sockfd,
+            //         (struct sockaddr *)&client_address, (socklen_t *)&client_len);
+            //     printf("new connect \n");
+            //     ev.data.fd = client_sockfd;
+            //     ev.events = EPOLLIN;//设置监听事件为可写
+            //     epoll_ctl(epfd, EPOLL_CTL_ADD, client_sockfd, &ev);//新增套接字
+            // }
+            // else if(events[i].events & EPOLLIN) {  //可读事件
+            //     if((sock_fd = events[i].data.fd) < 0)
+            //         continue;
+            //     print_readlines(client_sockfd);
+            //     ev.data.fd = sock_fd;
+            //     ev.events = EPOLLOUT;
+            //     epoll_ctl(epfd,EPOLL_CTL_MOD,sock_fd,&ev);//修改监听事件为可写
+            // }
+            // else if(events[i].events & EPOLLOUT) { //可写事件
+            //     sock_fd = events[i].data.fd;
+            //     write(sock_fd, &response, sizeof(response));
+            //     printf("response OK!\n");
+            //     close(sock_fd);
+            // }
+
+            // mac
+            sock_fd = (int)(intptr_t)events[i].udata;
+            int event_type = events[i].filter;
+            printf("echo event_type %d \n", event_type);
+            if (event_type == EVFILT_READ) {
+                if (sock_fd == server_sockfd) {
+                    //Accept a connection
+                    client_sockfd = accept(server_sockfd,
+                        (struct sockaddr *)&client_address, (socklen_t *)&client_len);
+                    // setNonBlock(client_sockfd);
+                    printf("new connect \n");
+                    updateEvents(epfd, client_sockfd, kReadEvent, 0);
+                } else {
+                    if (sock_fd < 0)
+                        continue;
+                    print_readlines(sock_fd);
+                    updateEvents(epfd, sock_fd, kWriteEvent, 1);
+                }
+            } else if (event_type == EVFILT_WRITE) {
+                write(sock_fd, &response, sizeof(response));
+                updateEvents(epfd, sock_fd, kReadEvent, 1);
+                printf("response OK!\n");
+                close(sock_fd);
+            } else {
+                ;
+            }
+        }
     }
     close(server_sockfd);
+    close(epfd);
     
     
     
