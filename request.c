@@ -11,12 +11,22 @@ struct header {
     char value[1024]; 
 };
 
+// 链表  post 或 get 的参数 request_params
+struct request_param {
+    struct request_param * next_param;
+    char * key;
+    char * value;
+};
+
+
 struct request {
     char * method;
     char * url;
     char * version;
     struct header headers[MAXHEADERSLEN];
     char * body; 
+    struct request_param * get_param_start;
+    struct request_param * post_param_start;
 };
 
 
@@ -35,6 +45,8 @@ struct request create_request() {
         NULL,
         {},
         NULL,
+        NULL,
+        NULL,
     };
     for (int i=0; i < MAXHEADERSLEN; i++) {
         tmp.headers[i] = create_header();
@@ -42,6 +54,26 @@ struct request create_request() {
     return tmp;
 }
 
+
+struct request_param * push_request_param(struct request_param * param, char * key, char * value) {
+    struct request_param * ori_param = param;
+    while(param && param->next_param) {
+        param = param->next_param;
+    }
+    struct request_param *new_param = (struct request_param*)malloc(sizeof(struct request_param));
+    new_param->next_param = NULL; 
+    new_param->key = key; 
+    new_param->value = value; 
+    if (param) {
+        param->next_param = new_param;
+        return ori_param;
+    }
+    else {
+        return new_param;
+    }
+}
+
+    
 
 void clear_request(struct request * req) {
     if ( NULL != req->method) {
@@ -52,6 +84,19 @@ void clear_request(struct request * req) {
         free(req->body);
         req->body = NULL;
     }
+    struct request_param *param = req->get_param_start;
+    struct request_param *next_param = NULL;
+    while(param) {
+        next_param = param->next_param;
+        free(param);
+        param = next_param;
+    }
+    param = req->post_param_start;
+    while(param) {
+        next_param = param->next_param;
+        free(param);
+        param = next_param;
+    }   next_param = NULL;
 }
 
 void reset_backup() {
@@ -209,6 +254,29 @@ void suck_body(struct request * req, char * line_p) {
 }
 
 
+void parse_request_params(struct request * request) {
+    char* url_root_param[2];
+    char* key_values[20];
+    int params_index = 0;
+    char* key_value[2];
+    if (mysplit(request->url, "?", url_root_param, 2) == 2) {
+        params_index = mysplit(url_root_param[1], "&", key_values, 20);
+        for(int i=0; i < params_index; i++) {
+            mysplit(key_values[i], "=", key_value, 2);
+            request->get_param_start = push_request_param(request->get_param_start, key_value[0], key_value[1]);
+        }
+    }
+    if (request->body) {
+        params_index = mysplit(request->body, "&", key_values, 20);
+        for(int i=0; i < params_index; i++) {
+            mysplit(key_values[i], "=", key_value, 2);
+            request->post_param_start = push_request_param(request->post_param_start, key_value[0], key_value[1]);
+        }
+
+    }
+}
+
+
 char * get_header_value(struct request * req, char * header_key) {
     for (int i=0; i < MAXHEADERSLEN; i++) {
         if ( req->headers[i].key[0] == '\0') {
@@ -284,5 +352,16 @@ void print_readlines(int client) {
             break; 
     }
     printf(">>> request body is %s\n", this_request.body);
+    parse_request_params(&this_request);
+    struct request_param * param = this_request.get_param_start;
+    while( param ) { 
+        printf("GET param key `%s` value `%s` \n", param->key, param->value);
+        param = param->next_param;
+    }
+    param = this_request.post_param_start;
+    while( param ) {
+        printf("POST param key `%s` value `%s` \n", param->key, param->value);
+        param = param->next_param;
+    }
     clear_request(&this_request);
 }
