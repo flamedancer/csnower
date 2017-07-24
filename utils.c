@@ -77,4 +77,51 @@ int mysplit(char * str, char * sep, char **split_rst, int rst_len) {
 
 }
 
+int mystrinstr(char * str, char * find) {
+    if ( *find == '\0' )
+        return 1;
+    while(*str) {
+        if ( mystartswith(str, find) )
+            return 1;
+        str++;
+    }
+    return 0;
+}
 
+int mycharinstr(char *str, char find) {
+    if ( find == '\0') 
+        return 1;
+    while(*str) {
+        if (*str == find)
+            return 1;
+        str++;
+    }
+    return 0;
+}
+
+
+char * mylstrip(char * str, char * cloth) {
+    cloth = (*cloth == '\0') ? " \n\t\r" : cloth;    
+    while(mycharinstr(cloth, *str)) {
+        str++;
+    }
+    return str;
+    
+}
+
+char * myrstrip(char str[], char * cloth) {
+    cloth = (*cloth == '\0') ? " \n\t\r" : cloth;    
+    char * ori_str = str;
+    str = str + mystrlen(str);
+    while(mycharinstr(cloth, *str)) {
+        str--;
+    }
+    *(str + 1) = '\0';
+    return ori_str;
+}
+
+
+char * mystrip(char * str, char * cloth) {
+    myrstrip(str, cloth);
+    return mylstrip(str, cloth);
+}
