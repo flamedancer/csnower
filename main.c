@@ -88,6 +88,7 @@
 #include <fcntl.h>
 #include "request.c"
 #include "poll.c"
+#include "response.c"
 
 
 #define READLEN 1024
@@ -95,6 +96,8 @@
 const int MaxEvents = 20;
 
 int main() {
+    install_handlers();
+
     int server_sockfd, client_sockfd;
     int server_len, client_len;
     struct sockaddr_in server_address;
@@ -122,6 +125,7 @@ int main() {
     int epfd;
     int nfds;
     int sock_fd;
+    struct request * this_request;
     // ** 创建 poll
     // epfd = epoll_create(256);//生成epoll句柄   linux
     if ((epfd = kqueue()) == -1)  // mac
@@ -136,9 +140,12 @@ int main() {
      
     // ** mac
     struct kevent events[MaxEvents];
-    updateEvents(epfd, server_sockfd, kReadEvent, 0);
+    updateEvents(epfd, server_sockfd, kReadEvent, 0, NULL);
 
-    char response[] = "HTTP/1.1 200 OK\nContent-Type: text/html; charset=utf-8\n\n Hello World!\r\n";
+    int response_len = 1000;
+    char response_default[] = "HTTP/1.1 200 OK\nContent-Type: text/html; charset=utf-8\n\n Pag Not Found!\r\n";
+    char response[response_len];
+    memset( response, 0, sizeof(response) );
     
     while(1) {
         //  等待
@@ -150,7 +157,7 @@ int main() {
         // timeout.tv_nsec = 1000;
         // int n = kevent(epfd, NULL, 0, events, MaxEvents, &timeout);
         int n = kevent(epfd, NULL, 0, events, MaxEvents, NULL);
-        printf("server waiting connect %d \n", n);
+        printf("server waiting events %d \n", n);
         for(int i=0;i<n;i++) {
             // linux
             // if(events[i].data.fd == server_sockfd)  { //有新的连接
@@ -178,7 +185,8 @@ int main() {
             // }
 
             // mac
-            sock_fd = (int)(intptr_t)events[i].udata;
+            // sock_fd = (int)(intptr_t)events[i].udata;
+            sock_fd = events[i].ident;
             int event_type = events[i].filter;
             printf("echo event_type %d \n", event_type);
             if (event_type == EVFILT_READ) {
@@ -188,17 +196,27 @@ int main() {
                         (struct sockaddr *)&client_address, (socklen_t *)&client_len);
                     // setNonBlock(client_sockfd);
                     printf("new connect \n");
-                    updateEvents(epfd, client_sockfd, kReadEvent, 0);
+                    updateEvents(epfd, client_sockfd, kReadEvent, 0, NULL);
                 } else {
                     if (sock_fd < 0)
                         continue;
-                    print_readlines(sock_fd);
-                    updateEvents(epfd, sock_fd, kWriteEvent, 1);
+                    this_request = print_readlines(sock_fd);
+                    updateEvents(epfd, sock_fd, kWriteEvent, 1, (void *)(this_request));
                 }
             } else if (event_type == EVFILT_WRITE) {
-                write(sock_fd, &response, sizeof(response));
-                updateEvents(epfd, sock_fd, kReadEvent, 1);
+                this_request = (struct request *)(events[i].udata);
+                // request_url = (char *)(events[i].udata);
+                struct hash_item * handler_item = find_hash_item(this_request->url + 1);
+                if ( NULL == handler_item ) {
+                    write(sock_fd, &response_default, sizeof(response_default));
+                }
+                else {
+                    handler_item->handler_fuc(response, response_len, this_request);
+                    write(sock_fd, &response, mystrlen(response)*sizeof(char));
+                }
+                updateEvents(epfd, sock_fd, kReadEvent, 1, NULL);
                 printf("response OK!\n");
+                clear_request(this_request);
                 close(sock_fd);
             } else {
                 ;

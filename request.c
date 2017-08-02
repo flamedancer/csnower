@@ -38,20 +38,10 @@ struct header create_header() {
     return tmp;
 }
 
-struct request create_request() {
-    struct request tmp = {
-        NULL,
-        NULL,
-        NULL,
-        {},
-        NULL,
-        NULL,
-        NULL,
-    };
-    for (int i=0; i < MAXHEADERSLEN; i++) {
-        tmp.headers[i] = create_header();
-    }
-    return tmp;
+struct request * create_request() {
+    struct request * new_request = malloc(sizeof(struct request));
+    memset(new_request, 0, sizeof(struct request));
+    return new_request; 
 }
 
 
@@ -290,7 +280,7 @@ char * get_header_value(struct request * req, char * header_key) {
 }
 
 
-void print_readlines(int client) {
+struct request * print_readlines(int client) {
     reset_backup();
     read_over=0;
     int step = 0;  //  0 method_url_version  1 header 2 post_data
@@ -299,7 +289,7 @@ void print_readlines(int client) {
     char * none_line = "";
     int content_length = -1;
     char * content_length_str;
-    struct request this_request = create_request();
+    struct request * this_request = create_request();
     while(1) { 
         keep_line = 0;
         line = read_line(client, content_length);
@@ -308,11 +298,11 @@ void print_readlines(int client) {
             break;
         }
         if (mystrcmp(line, none_line) == 0) {
-            content_length_str = get_header_value(&this_request, "Content-Length");
+            content_length_str = get_header_value(this_request, "Content-Length");
             if (NULL == content_length_str)
                 content_length = 0;
             else
-                content_length = myatoi(get_header_value(&this_request, "Content-Length"));
+                content_length = myatoi(get_header_value(this_request, "Content-Length"));
             // 数据结束
             if (content_length == 0) {
                 read_over = 1;
@@ -322,15 +312,15 @@ void print_readlines(int client) {
         }
         else {
             if (step == 0) {
-                suck_method_url_version(&this_request, line);
+                suck_method_url_version(this_request, line);
                 keep_line = 1;
                 step++;
             }
             else if (step == 1) {
-                suck_headers(&this_request, line);
+                suck_headers(this_request, line);
             }
             else if (step == 2) {
-                suck_body(&this_request, line);
+                suck_body(this_request, line);
                 keep_line = 1;
             }
 
@@ -341,27 +331,28 @@ void print_readlines(int client) {
             line = NULL;
         }
     }
-    printf(">>> request method is %s\n", this_request.method);
-    printf(">>> request url is %s\n", this_request.url);
-    printf(">>> request version is %s\n", this_request.version);
+    printf(">>> request method is %s\n", this_request->method);
+    printf(">>> request url is %s\n", this_request->url);
+    printf(">>> request version is %s\n", this_request->version);
     for (int i=0; i < MAXHEADERSLEN; i++) {
-        if (this_request.headers[i].key[0] != '\0') {
-            printf(">>> request header key `%s`  value '%s' \n", this_request.headers[i].key, this_request.headers[i].value); 
+        if (this_request->headers[i].key[0] != '\0') {
+            printf(">>> request header key `%s`  value '%s' \n", this_request->headers[i].key, this_request->headers[i].value); 
         }
         else
             break; 
     }
-    printf(">>> request body is %s\n", this_request.body);
-    parse_request_params(&this_request);
-    struct request_param * param = this_request.get_param_start;
+    printf(">>> request body is %s\n", this_request->body);
+    parse_request_params(this_request);
+    struct request_param * param = this_request->get_param_start;
     while( param ) { 
         printf("GET param key `%s` value `%s` \n", param->key, param->value);
         param = param->next_param;
     }
-    param = this_request.post_param_start;
+    param = this_request->post_param_start;
     while( param ) {
         printf("POST param key `%s` value `%s` \n", param->key, param->value);
         param = param->next_param;
     }
-    clear_request(&this_request);
+    return this_request;
+    //clear_request(&this_request);
 }

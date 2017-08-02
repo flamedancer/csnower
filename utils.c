@@ -1,4 +1,8 @@
-void mystrcp(char * from, int cp_num, char * to) {
+#define min(x,y) (x)>(y)?(y):(x) 
+#define max(x,y) (x)<(y)?(y):(x) 
+
+
+char * mystrcp(char * from, int cp_num, char * to) {
 /* cp_num 代表要复制的字符数 若为0表示全部复制(遇到\0才停止) */
     if (cp_num != 0) {
         for(int i=0; i<cp_num ; i++) {
@@ -10,6 +14,7 @@ void mystrcp(char * from, int cp_num, char * to) {
             *to = *from;
         }
     }
+    return to;
 }
 
 int mystrcmp(char * str1, char * str2) {
@@ -125,3 +130,4 @@ char * mystrip(char * str, char * cloth) {
     myrstrip(str, cloth);
     return mylstrip(str, cloth);
 }
+
