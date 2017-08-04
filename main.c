@@ -200,12 +200,19 @@ int main() {
                 } else {
                     if (sock_fd < 0)
                         continue;
+
                     this_request = print_readlines(sock_fd);
-                    updateEvents(epfd, sock_fd, kWriteEvent, 1, (void *)(this_request));
+                    if (NULL == this_request->url) {
+                        printf("request is  NULL \n");
+                        clear_request(this_request);
+                        close(sock_fd);
+                    }
+                        
+                    else
+                        updateEvents(epfd, sock_fd, kWriteEvent, 1, (void *)(this_request));
                 }
             } else if (event_type == EVFILT_WRITE) {
                 this_request = (struct request *)(events[i].udata);
-                // request_url = (char *)(events[i].udata);
                 struct hash_item * handler_item = find_hash_item(this_request->url + 1);
                 if ( NULL == handler_item ) {
                     write(sock_fd, &response_default, sizeof(response_default));

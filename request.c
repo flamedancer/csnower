@@ -81,12 +81,15 @@ void clear_request(struct request * req) {
         free(param);
         param = next_param;
     }
+    req->get_param_start = NULL;
     param = req->post_param_start;
     while(param) {
         next_param = param->next_param;
         free(param);
         param = next_param;
-    }   next_param = NULL;
+    }
+    req->post_param_start = NULL;
+    free(req);
 }
 
 void reset_backup() {
@@ -334,6 +337,9 @@ struct request * print_readlines(int client) {
     printf(">>> request method is %s\n", this_request->method);
     printf(">>> request url is %s\n", this_request->url);
     printf(">>> request version is %s\n", this_request->version);
+    // todo 有时候会受到 NULL 数据
+    if (NULL == this_request->url)
+        return this_request;
     for (int i=0; i < MAXHEADERSLEN; i++) {
         if (this_request->headers[i].key[0] != '\0') {
             printf(">>> request header key `%s`  value '%s' \n", this_request->headers[i].key, this_request->headers[i].value); 
